@@ -1,24 +1,27 @@
 ---
 name: testing-debugging
-description: "Use when investigating, reproducing, testing, or fixing bugs in the Hangman game, including game rules, invalid input, and unexpected states."
+description: "Use when auditing or testing Hangman rules, multiplayer clients, concurrent guesses, WebSocket reconnects, OAuth/session behavior, word-corpus validation, or room security without editing files."
 ---
 
 # Testing and Debugging
 
-Use this Skill to diagnose a concrete behavior, verify game logic, and make a focused correction when appropriate. Keep investigation and validation limited to the reported problem.
+Use this Skill for read-only auditing, test execution, and diagnosis of the multiplayer Hangman project. This Skill is used by the Tester agent, which must not modify files.
 
 ## Procedure
 
-1. Read `.github/copilot-instructions.md` and `docs/PLANO.md`; inspect the relevant implementation and test setup.
-2. Turn the report into a minimal, observable reproduction. If it cannot be reproduced, state what was checked and what information is missing.
-3. Identify the expected and actual behavior, then trace the smallest relevant path through the rules, interface, and tests.
-4. Add or update a focused test that captures the defect, including invalid input or unexpected states where relevant.
-5. Run the narrowest applicable test or check and report its actual result. Do not imply that unrun tests passed.
-6. If a fix is in scope, make the smallest change that addresses the cause without modifying unrelated behavior.
-7. Re-run the regression test and other directly relevant checks; report commands, results, and any remaining uncertainty.
+1. Read `.github/copilot-instructions.md` and `docs/PLANO.md`; inspect the relevant code, tests, configuration, and available local environment.
+2. Convert the report or requirement into explicit expected behavior and read-only checks. Distinguish findings from assumptions.
+3. Audit game rules and invalid input, including accent normalization, repeated guesses, win/loss, and the 5-12 letter constraints.
+4. Run existing safe, relevant tests. For multiplayer, use multiple clients to check room capacity (2-6), state synchronization, duplicate/concurrent guesses, reconnects, persistence, and 10-minute empty-room expiration where the environment permits.
+5. Inspect WebSocket and HTTP authorization, untrusted message validation, rate/size limits, room code handling, and whether secret words are excluded from pre-completion messages, assets, and logs.
+6. Check optional Google OAuth/OIDC callbacks, state/nonce/session protections, guest access, D1 persistence boundaries, and that no secrets are exposed. Do not authenticate against real accounts.
+7. Run the existing word validator, if available, and report actual total, uniqueness, length/normalization failures, source/licensing limitations, and whether at least 1,200 valid entries are verified.
+8. Do not create or edit tests/files. If coverage is missing or a fix is needed, report the exact suggested cases and hand findings to Developer.
+9. Report commands executed and actual outcomes; identify unavailable tests, local-vs-production limits, and remaining uncertainty.
 
 ## Examples
 
-- Use for: “A mesma letra está consumindo duas tentativas; reproduza e corrija.”
-- Use for: “Teste a vitória, a derrota e a entrada de caracteres inválidos.”
-- Do not use for: “Crie a primeira versão completa da interface”; use `game-development` instead.
+- Use for: “Audite se dois clientes enviando a mesma letra ao mesmo tempo consomem uma tentativa uma vez.”
+- Use for: “Verifique reconexão, expiração da sala e se a palavra aparece antes do fim.”
+- Use for: “Valide o corpus e confira o fluxo OAuth sem usar contas reais.”
+- Do not use for: “Crie testes para cobrir a concorrência”; Tester é somente leitura, então peça ao `game-development` a implementação dos testes.

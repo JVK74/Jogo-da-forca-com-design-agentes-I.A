@@ -1,26 +1,29 @@
 ---
 name: cloudflare-deployment
-description: "Use when assessing Cloudflare Pages compatibility, preparing deployment configuration, explaining Wrangler setup and commands, or diagnosing build and deploy issues for this project."
+description: "Use when configuring or troubleshooting the Cloudflare Vite plugin, Workers, Durable Objects, WebSockets and Hibernation, D1 migrations, Wrangler environments, secrets, or authorized publication of this multiplayer game."
 ---
 
 # Cloudflare Deployment
 
-Use this Skill for Cloudflare Pages and Wrangler planning, configuration, and troubleshooting. The project plan proposes a static Vite build; confirm the current architecture and build output before recommending deployment settings.
+Use this Skill to prepare, validate, and explain the Cloudflare runtime for the cooperative multiplayer game. Confirm actual scripts and configuration; do not assume defaults.
 
 ## Procedure
 
-1. Read `.github/copilot-instructions.md` and `docs/PLANO.md`; inspect the package scripts, Vite configuration, and current deployment files if they exist.
-2. Determine whether the project is static or requires server-side functionality. For a static Vite site, verify the build command and output directory from the actual configuration rather than assuming defaults.
-3. Check current Cloudflare Pages and Wrangler requirements against official Cloudflare documentation when needed. Distinguish documented facts from repository-specific findings.
-4. Explain the required configuration and the purpose of each proposed change before applying it. Avoid adding a Worker or other infrastructure unless the architecture requires it.
-5. Explain Wrangler installation and local development/build commands. Do not install dependencies unless explicitly requested and appropriate for the task.
-6. Before any action involving Cloudflare authentication, account settings, or publishing, obtain explicit authorization for that specific action. Without it, provide instructions or prepare only locally scoped, non-account changes that were requested.
-7. For deployment troubleshooting, inspect build output, configuration, and logs available to the user; make only focused changes and re-check the relevant build or validation command.
-8. Summarize configuration changes, commands actually run and their results, remaining risks, and any steps that still require user authorization.
+1. Read `.github/copilot-instructions.md` and `docs/PLANO.md`; inspect the Vite config, package scripts, Wrangler config, migrations, bindings, and Worker/DO implementation that exist.
+2. Verify current requirements against official Cloudflare documentation when needed. Distinguish documented platform behavior from repository-specific findings.
+3. Check Vite integration with the official Cloudflare Workers Vite plugin, Worker asset serving/routing, local development, build output, and supported Wrangler commands.
+4. Review Durable Object class bindings/migrations, persistent storage, WebSocket upgrade/routing, Hibernation callbacks and attachments, and empty-room expiration alarms. Keep each room's state authoritative in its DO.
+5. Review D1 bindings and SQL migrations for profiles, sessions, and authenticated-user statistics. Explain migration order and safe local validation; never assume production data is disposable.
+6. Prepare Wrangler configuration and local instructions only for the requested scope. Explain each binding, migration, environment, and change before editing.
+7. Keep Google OAuth/OIDC credentials in Cloudflare Secrets, not vars, frontend assets, repository files, or logs. Explain local secret setup without requesting or displaying secret values.
+8. Run only authorized local checks and report exact commands/results. Do not equate local validation with a production deployment.
+9. Before Cloudflare login, account/resource changes, or deployment, require explicit authorization for that specific action. A request to prepare configuration is not authorization to authenticate or publish.
+10. Summarize changes, decisions, documentation consulted, validation, outstanding risks, and authorization-dependent next steps.
 
 ## Examples
 
-- Use for: “Confira se a saída atual do Vite pode ser publicada no Cloudflare Pages.”
-- Use for: “Explique como instalar e usar o Wrangler para testar localmente.”
-- Use for: “Investigue por que o build do Pages não encontra a pasta de saída.”
-- Do not use for: “Faça login na Cloudflare e publique o site”; never perform these actions without explicit authorization.
+- Use for: “Configure local Wrangler bindings for the room Durable Object and D1.”
+- Use for: “Review WebSocket Hibernation and Durable Object migration settings.”
+- Use for: “Prepare D1 migrations and instructions for Google OAuth secrets without logging in.”
+- Use for: “After explicit authorization, publish the Worker and verify the public URL.”
+- Do not use for: “Log in to Google or Cloudflare without authorization”; never perform it.

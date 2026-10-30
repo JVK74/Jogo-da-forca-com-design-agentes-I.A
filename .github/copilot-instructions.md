@@ -1,42 +1,48 @@
 # Instrucoes do projeto
 
-## Contexto
+## Contexto e arquitetura
 
-Este repositorio sera usado para desenvolver um jogo da forca em portugues brasileiro, com foco em aprendizado, design de agentes de IA, responsividade e acessibilidade. Antes de implementar funcionalidades, consulte `docs/PLANO.md`.
+Este repositorio sera usado para desenvolver um jogo da forca cooperativo multiplayer em portugues brasileiro, com login opcional, responsividade, acessibilidade e hospedagem na Cloudflare. Antes de implementar, consulte `docs/PLANO.md` e trabalhe somente no escopo solicitado.
 
-## Organizacao e arquitetura
+- Use HTML semantico, CSS e JavaScript no frontend; Node.js/npm para desenvolvimento e scripts.
+- Use Vite com o plugin oficial da Cloudflare para Workers. Cloudflare Workers serve a interface e implementa as rotas do backend.
+- Use Durable Objects (DO) como autoridade do estado de cada sala e para conexoes WebSocket. Use armazenamento persistente do DO para o estado da partida e WebSocket Hibernation quando apropriado.
+- Use D1 para perfis, sessoes e estatisticas persistentes de contas autenticadas. Nao use D1 como estado em tempo real da sala.
+- Use Wrangler para desenvolvimento, bindings, migrations, validacao e publicacao autorizada.
+- O jogo e cooperativo: salas comportam de 2 a 6 jogadores; convidados podem cria-las e entrar; qualquer jogador conectado pode enviar palpites. Salas sem jogadores conectados expiram apos 10 minutos.
+- O banco de palavras deve ter meta minima de 1.200 palavras unicas, em portugues brasileiro, com 5 a 12 letras. Palpites ignoram acentos; a grafia original e preservada na exibicao.
 
-- Mantenha a aplicacao como um site estatico, separado em HTML semantico, CSS e JavaScript.
-- Prefira modulos pequenos com responsabilidades claras. Mantenha regras da partida separadas da manipulacao do DOM e da apresentacao visual.
-- Use nomes claros em portugues ou em ingles de forma consistente. Textos apresentados a quem joga devem estar em portugues brasileiro.
-- Evite dependencias e abstracoes desnecessarias. Explique qualquer desvio relevante da arquitetura planejada.
-- Nao crie, instale ou configure ferramentas sem necessidade para a tarefa; nao faca login, deploy ou publicacao sem autorizacao explicita.
+## Organizacao e responsabilidades
 
-## Qualidade e alteracoes
+- Separe frontend, Worker/backend, regras puras da partida, protocolo compartilhado, Durable Objects, autenticacao, dados e testes em modulos pequenos.
+- Mantenha estado autoritativo e validacao de acoes no servidor. O cliente apresenta o estado recebido e nunca e autoridade sobre resultado, tentativas, identidade ou palavra secreta.
+- Mantenha palavras e segredos do jogo exclusivamente no lado servidor; nao os inclua em assets publicos, respostas iniciais, logs ou mensagens WebSocket antes do fim da partida.
+- Mantenha credenciais OAuth e outros segredos somente em secrets do ambiente Cloudflare. Nunca os inclua em codigo, frontend, testes, documentacao ou historico Git.
+- Convidados devem poder jogar sem conta. Autenticacao Google OAuth/OIDC e opcional; estatisticas persistentes sao vinculadas a conta autenticada.
+- Use nomes consistentes e mensagens ao jogador em portugues brasileiro. Explique desvios relevantes da arquitetura aprovada.
 
-- Faca alteracoes pequenas, coerentes e diretamente relacionadas ao pedido.
-- Preserve comportamentos existentes, verifique entradas e estados invalidos e trate erros de forma explicita.
-- Nao afirme que algo foi executado, testado ou validado sem realmente executar a verificacao correspondente.
-- Ao concluir uma alteracao, explique o que mudou, quais arquivos foram afetados, as verificacoes executadas e quaisquer limitacoes ou proximos passos.
-- Mantenha a documentacao relacionada atualizada quando uma decisao ou comportamento do projeto mudar.
+## Comunicacao multiplayer e seguranca
 
-## Acessibilidade e experiencia
+- Valide no Worker/DO toda entrada HTTP e mensagem WebSocket: formato, tamanho, fase da partida, limite da sala, identidade/sessao, repeticoes e permissao.
+- Trate mensagens do cliente como dados nao confiaveis. Limite tamanho e frequencia, valide codigos de sala e nao aceite estado de jogo enviado pelo cliente.
+- O DO serializa as alteracoes da sala. Palpites simultaneos iguais devem ser contabilizados uma unica vez; o estado resultante e transmitido aos clientes conectados.
+- Envie somente o estado publico necessario: letras reveladas, palpites ja feitos, tentativas restantes, jogadores e fase. Nunca envie a palavra alvo nem informacoes que permitam deduzi-la antes do fim.
+- Defina tratamento de desconexao, reconexao, mensagens duplicadas, erros e expiracao. Salas ficam vazias quando nao ha jogadores conectados e devem expirar apos 10 minutos.
+- Para OAuth/OIDC, valide state, nonce, redirect URI e tokens conforme o fluxo adotado; proteja sessoes com cookies HttpOnly, Secure e SameSite adequado, e considere CSRF e revogacao. Nunca confie em identificadores declarados pelo navegador.
+- Armazene apenas dados necessarios. Nao exponha tokens de sessao em logs; quando persistidos, proteja-os e use estrategia de expiracao/revogacao.
 
-- Use HTML semantico, estrutura de titulos coerente, rotulos para controles e texto alternativo quando imagens informativas forem adicionadas.
-- Garanta que as funcoes possam ser usadas por teclado, que o foco seja visivel e que cores nao sejam o unico meio de transmitir informacao.
-- Forneca mensagens compreensiveis para leitores de tela quando o estado da partida mudar, sem anunciar conteudo excessivo.
-- Respeite preferencias de movimento reduzido e mantenha contraste e legibilidade adequados em telas pequenas e grandes.
+## Qualidade, acessibilidade e testes
 
-## Testes
+- Adicione ou atualize testes para regras, endpoints, mensagens, persistencia e falhas. Cubra vitoria, derrota, palpites invalidos/repetidos, acentos, concorrencia, duas a seis pessoas, reconexao, expiracao de sala e autorizacao.
+- Valide automaticamente o corpus: minimo de 1.200 palavras unicas, portugues brasileiro, 5-12 letras conforme regra Unicode documentada, sem itens proibidos e com fonte/licenca registradas.
+- Teste com multiplos clientes e o ambiente local do Wrangler/Workers; diferencie testes locais de uma publicacao real.
+- Confira navegacao por teclado, foco visivel, contraste, leitores de tela, movimento reduzido e diferentes larguras.
+- Trate texto de jogadores e conteudo externo como dados; evite APIs que interpretem HTML.
+- Execute verificacoes relevantes e informe apenas comandos e resultados realmente obtidos. Nao silencie erros.
+- Ao concluir, explique decisoes, arquivos alterados, verificacoes, limitacoes e proximos passos.
 
-- Adicione ou atualize testes para regras da partida e comportamentos importantes sempre que houver codigo executavel.
-- Verifique os casos de vitoria, derrota, letras repetidas, entradas invalidas e reinicio, conforme aplicavel.
-- Confira a interface em diferentes larguras e valide o uso por teclado e tecnologias assistivas.
-- Execute os comandos de verificacao disponiveis no projeto e relate os resultados reais; nao substitua testes por suposicoes.
+## Seguranca e autorizacao
 
-## Seguranca
-
-- Nao inclua credenciais, tokens ou dados pessoais no codigo, nos testes, na documentacao ou no historico do Git.
-- Trate entradas como dados; evite inserir conteudo nao confiavel com APIs que interpretem HTML.
-- Prefira dependencias conhecidas, necessarias e mantidas; avalie o impacto antes de adicionar uma dependencia.
-- Nao exponha segredos em configuracoes publicas do site. Solicite autorizacao antes de autenticar, publicar no GitHub ou fazer deploy no Cloudflare.
+- Nao inclua credenciais, tokens ou dados pessoais no repositorio.
+- Nao instale dependencias, crie recursos em contas Cloudflare/Google, autentique-se ou publique sem autorizacao explicita para a acao correspondente.
+- Nao faca commit ou push sem pedido explicito. Preserve alteracoes existentes e nunca remova arquivos do stage.

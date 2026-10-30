@@ -1,71 +1,158 @@
-# Plano do projeto
+# Plano tecnico: jogo da forca cooperativo multiplayer
 
-## Objetivo
+## Objetivo e requisitos aprovados
 
-Desenvolver um jogo da forca para navegador, em portugues brasileiro, responsivo e acessivel, como trabalho universitario sobre design de agentes de IA. A primeira versao pode ser um site estatico: as regras da partida executadas no navegador nao exigem servidor proprio.
+Construir um jogo da forca cooperativo para navegador, em portugues brasileiro, acessivel e responsivo, com salas privadas por codigo e estado sincronizado em tempo real. O jogo deve permitir convidados sem conta e login opcional com Google OAuth/OIDC. A infraestrutura de aplicacao e backend sera Cloudflare Workers.
 
-## Arquitetura inicial sugerida
+Decisoes fixadas:
 
-- **HTML**: estrutura semantica da pagina, informacoes da partida e controles.
-- **CSS**: identidade visual, estados da interface e adaptacao a diferentes tamanhos de tela.
-- **JavaScript**: estado e regras da partida, validacao das letras, atualizacao da interface e interacoes.
-- **Node.js**: ambiente para executar as ferramentas de desenvolvimento e os scripts do projeto; nao precisa ser servidor de producao para esta arquitetura.
-- **npm**: instalacao e gerenciamento das dependencias e execucao dos scripts declarados no `package.json`.
-- **Vite**: servidor local de desenvolvimento e empacotamento dos arquivos estaticos para producao.
-- **Cloudflare Pages**: hospedagem opcional dos arquivos estaticos gerados pelo Vite.
-- **Wrangler**: CLI da Cloudflare, opcional para desenvolvimento local integrado e publicacao no Pages quando chegar a etapa de deploy.
+- De 2 a 6 jogadores por sala; qualquer jogador conectado pode enviar palpites.
+- Salas vazias expiram apos 10 minutos.
+- Palpites ignoram acentos, mas a palavra e exibida com sua grafia original.
+- Meta de pelo menos 1.200 palavras unicas, em portugues brasileiro, com 5 a 12 letras.
+- Frontend Vite com o plugin oficial Cloudflare para Workers; Workers atendem frontend e backend.
+- Durable Objects gerenciam salas, WebSockets e estado persistente da partida; usar WebSocket Hibernation quando apropriado.
+- D1 guarda perfis, sessoes e estatisticas persistentes de contas autenticadas.
+- Wrangler apoia desenvolvimento, configuracao, migrations e publicacao.
 
-Nao ha conflito inerente entre essa combinacao: Vite gera arquivos estaticos que podem ser hospedados no Cloudflare Pages, e Wrangler pode auxiliar no fluxo da plataforma. Para um jogo local sem backend, Node.js e npm servem ao desenvolvimento e a construcao, nao exigem um servidor Node.js em producao. Se o projeto passar a precisar de contas, partidas compartilhadas, persistencia remota ou agentes executados no servidor, sera necessario reavaliar a arquitetura; um backend ou recursos Cloudflare Workers podem ser apropriados. Isso nao faz parte do escopo inicial proposto.
+O escopo nao inclui neste momento implementar funcionalidades, instalar dependencias, provisionar recursos de conta, autenticar ou publicar.
+
+## Arquitetura tecnica
+
+### Frontend
+
+HTML semantico, CSS responsivo e JavaScript em modulos. Vite fornece servidor local e build; o plugin oficial Cloudflare para Workers integra o frontend ao runtime Worker. A interface envia acoes e apresenta o estado publico recebido do servidor, mas nao decide o resultado da partida.
+
+### Worker
+
+O Worker e a entrada da aplicacao publicada: entrega assets estaticos e processa rotas HTTP, OAuth callback e upgrade de conexoes WebSocket. Valida entradas, cookies/sessoes, limites e direciona conexoes para o Durable Object da sala. Segredos OAuth ficam em secrets do ambiente, nunca no bundle.
+
+### Durable Objects e WebSockets
+
+Cada sala corresponde a um Durable Object, selecionado por um identificador aleatorio de sala. O DO e a autoridade do estado da partida e usa armazenamento persistente para restaurar sala e partida apos reinicializacao. As mensagens dos clientes sao validas apenas como pedidos; o DO valida, aplica as regras e transmite atualizacoes. WebSocket Hibernation pode reduzir custo de conexoes ociosas, desde que o tratamento de reconexao e o armazenamento de contexto preservem o comportamento correto.
+
+### D1 e autenticacao
+
+D1 persiste perfis vinculados ao identificador estavel do Google, sessoes e estatisticas de contas autenticadas. O jogo convidado nao depende de D1 nem de login para criar/entrar em sala. O fluxo OAuth/OIDC usa state, nonce, redirect URI validada e verificacao de resposta; ao completar, o Worker emite sessao propria em cookie seguro. As mensagens WebSocket tambem precisam ser associadas a identidade/sessao validada. Tokens e secrets nunca vao para o navegador ou logs.
+
+### Banco de palavras
+
+O corpus e mantido no lado servidor e nao deve ser servido como asset publico. A meta e no minimo 1.200 palavras validas, unicas, em portugues brasileiro, com 5 a 12 letras. Registrar origem, licenca e atribuicao. Um script repetivel normaliza Unicode, valida comprimento por caracteres/letras conforme regra definida, elimina duplicatas e informa rejeicoes. Palpites usam uma chave normalizada sem acentos; exibicao e revelacao preservam os caracteres originais. A validacao automatica de formato nao substitui revisao linguistica e de licenca.
+
+## Funcionamento das salas
+
+1. Um convidado ou usuario autenticado solicita criar sala. O Worker gera um codigo aleatorio dificil de adivinhar e inicializa o Durable Object correspondente.
+2. Jogadores entram pelo codigo; o Worker valida o pedido e associa o socket ao DO. O limite e de 2 a 6 participantes.
+3. Ao haver pelo menos 2 participantes, a partida pode iniciar segundo a regra de inicio definida na implementacao; o DO escolhe a palavra de forma segura e guarda a original em estado persistente.
+4. Qualquer jogador conectado envia uma letra. O DO valida fase, formato e repeticao; palpites simultaneos iguais sao serializados e contam somente uma vez.
+5. O DO transmite apenas estado publico: letras reveladas, palpites, tentativas restantes, participantes e fase. A palavra completa nunca e enviada antes do termino.
+6. A partida termina por vitoria/derrota conforme regras aprovadas e, entao, a palavra pode ser revelada. O numero de erros/tentativas para derrota ainda precisa ser definido antes da implementacao das regras.
+7. Uma desconexao temporaria permite reconexao sem duplicar participante ou estado. Quando nao houver jogadores conectados, a sala permanece recuperavel por ate 10 minutos; apos esse prazo o DO remove/expira o estado conforme mecanismo de alarme e politica implementada.
+
+Definir antes de programar: inicio automatico ou por acao, saida do jogador que criou a sala, tratamento de abandono no meio da partida e mensagem/UX quando a sala expira.
 
 ## Estrutura de pastas sugerida
 
-Esta estrutura e uma proposta para etapas futuras; os arquivos da aplicacao ainda nao devem ser criados nesta fase.
+Estrutura inicial recomendada; validar detalhes com o plugin oficial e a configuracao atual de Vite/Workers:
 
 ```text
 .
 ├── .github/
+│   ├── agents/
+│   ├── skills/
 │   └── copilot-instructions.md
 ├── docs/
-│   └── PLANO.md
-├── public/
-│   └── (recursos estaticos, se necessarios)
+│   ├── PLANO.md
+│   └── fontes-de-palavras.md
+├── migrations/
+│   └── 0001_init.sql
+├── scripts/
+│   └── validate-words.mjs
 ├── src/
-│   ├── js/
-│   │   ├── game.js       # regras e estado da partida
-│   │   └── main.js       # inicializacao e integracao com a interface
-│   ├── styles/
-│   │   └── main.css
-│   └── index.html
+│   ├── client/
+│   │   ├── main.js
+│   │   ├── views/
+│   │   └── styles/
+│   │       └── main.css
+│   ├── shared/
+│   │   ├── game-rules.js
+│   │   └── protocol.js
+│   └── worker/
+│       ├── index.js
+│       ├── routes/
+│       │   ├── auth.js
+│       │   └── rooms.js
+│       ├── durable-objects/
+│       │   └── room.js
+│       └── data/
+│           └── palavras.json
 ├── tests/
-│   └── (testes das regras e comportamentos)
+│   ├── unit/
+│   ├── workers/
+│   └── e2e/
+├── index.html
 ├── package.json
-└── vite.config.js        # somente se a configuracao padrao nao for suficiente
+├── vite.config.js
+└── wrangler.jsonc
 ```
 
-Uma configuracao de hospedagem especifica do Cloudflare so deve ser adicionada quando necessaria e depois de confirmar o fluxo de publicacao desejado. Nao e necessario criar Worker ou backend para a primeira versao estatica.
+O corpus pode ser carregado no Worker em build e nao deve ir para diretorio de assets publicos. A estrutura final de arquivos e a localizacao suportada do corpus dependem da integracao adotada para o Vite plugin.
 
-Para manter o projeto simples e permitir estudar agentes, a logica do agente pode ficar em um modulo JavaScript separado das regras da partida e da interface. O papel do agente (por exemplo, escolher palavras ou propor palpites), suas observacoes, acoes, estrategia e forma de avaliacao devem ser definidos antes da implementacao; este plano nao escolhe uma estrategia nem exige um servico externo de IA.
+## Responsabilidades dos agentes
 
-## Etapas planejadas
+- **Planner** (`project-planning`): analisar requisitos multiplayer, dependencias, riscos, arquitetura Cloudflare e criterios de conclusao. E somente leitura; nao implementa nem edita documentos.
+- **Developer** (`game-development`): implementar frontend, Worker/backend, regras, protocolo, Durable Objects, integracao OAuth/D1 e testes automatizados. Nao publica.
+- **Tester** (`testing-debugging`): executar auditoria e testes sem editar arquivos. Testa regras, multiplos clientes, concorrencia, reconexao, expiracao, OAuth/sessoes, corpus e exposicao da palavra. Como nao possui ferramenta de edicao, o Developer cria/atualiza testes a partir dos achados.
+- **DevOps** (`cloudflare-deployment`): preparar integracao Vite/Workers, bindings, Durable Objects, D1, migrations, Wrangler e configuracoes de secrets; verificar build e guiar publicacao. Login, alteracoes em conta e deploy exigem autorizacao explicita.
 
-1. **Preparacao do repositorio**: registrar instrucoes de trabalho, arquitetura, estrutura proposta e criterios de conclusao.
-2. **Fundacao da aplicacao**: escolher e registrar versoes das ferramentas, criar a estrutura minima do Vite e configurar scripts; instalar dependencias somente com autorizacao e quando a implementacao comecar.
-3. **Design do agente**: definir o papel do agente, o que ele pode observar e fazer, seus objetivos, estrategia, limites e criterios de avaliacao. Manter a politica do agente separada para que possa ser testada sem a interface.
-4. **Regras da partida**: implementar e testar estado, selecao da palavra, palpites, letras repetidas, vitoria, derrota e reinicio.
-5. **Interface e conteudo**: criar a pagina semantica em portugues brasileiro e integrar a interface as regras sem misturar responsabilidades.
-6. **Acessibilidade e responsividade**: implementar navegacao por teclado, foco visivel, anuncios de estado para leitores de tela, contraste adequado e layouts para telas pequenas e grandes.
-7. **Validacao**: executar testes e verificacoes disponiveis, revisar regras, comportamento do agente, acessibilidade e diferentes larguras; corrigir problemas encontrados.
-8. **Publicacao opcional**: somente com autorizacao, configurar Cloudflare Pages/Wrangler, autenticar se necessario e publicar. Nao fazer login, deploy ou publicar alteracoes no GitHub sem autorizacao explicita.
+## Fases de desenvolvimento
 
-## Criterios para considerar o jogo pronto
+1. **Fundacao e regras detalhadas**: criar aplicacao Vite/Workers local e scripts; definir erros maximos, inicio de partida, abandono e reconexao. Sem provisionar ou publicar recursos.
+2. **Regras e corpus**: implementar regras puras, normalizacao de acentos e validador de palavras; selecionar fonte/licenca e obter 1.200+ itens validos. Testar antes da integracao com sockets.
+3. **Salas multiplayer**: Durable Object por sala, armazenamento persistente, WebSocket, limite de 2-6, palpites sincronizados, seguranca da palavra e expiracao de salas vazias aos 10 minutos. Validar com multiplos clientes locais.
+4. **Interface e acessibilidade**: fluxos criar/entrar/aguardar/jogar/reconectar/fim; teclado, leitores de tela, foco, contraste, responsividade e mensagens em pt-BR.
+5. **Autenticacao opcional e D1**: Google OAuth/OIDC, sessoes seguras e persistencia minima de perfis/sessoes/estatisticas. Convidados permanecem funcionais; validar callback e cenarios de erro em ambiente local.
+6. **Hardening e validacao integrada**: testes unitarios, Worker/DO, concorrencia e ponta a ponta; revisar limites, privacidade, abuso de salas, mensagens e corpus.
+7. **Preparacao de entrega publica**: confirmar configuracao e build com DevOps, definir URL e callback OAuth de producao. Publicar apenas apos autorizacao explicita; fazer smoke test na URL publica com dois ou mais clientes.
 
-- A partida pode ser iniciada, receber palpites validos e chegar a vitoria ou derrota de forma consistente.
-- Letras repetidas e entradas invalidas sao tratadas sem corromper o estado ou contar tentativas indevidamente.
-- E possivel iniciar uma nova partida sem recarregar a pagina.
-- O papel do agente, suas observacoes, acoes, estrategia e criterios de avaliacao estao documentados; seu comportamento tem testes apropriados ao design escolhido.
-- Textos, instrucoes, mensagens e conteudo do jogo estao em portugues brasileiro.
-- A interface funciona em telas pequenas e grandes, sem perda de conteudo ou controles.
-- Os controles principais sao utilizaveis por teclado, o foco e visivel e as mudancas relevantes de estado sao comunicadas a tecnologias assistivas.
-- Estrutura semantica, contraste, legibilidade e preferencias de movimento reduzido foram considerados.
-- Testes cobrem as regras principais e as verificacoes disponiveis foram executadas, com resultados documentados sem alegacoes nao verificadas.
-- Nenhum segredo foi incluido. Qualquer publicacao foi feita apenas apos autorizacao explicita.
+## Criterios de aceitacao
+
+### Regras e palavras
+
+- Uma partida pode iniciar, receber palpites validos e terminar em vitoria ou derrota; regras de tentativas estao documentadas.
+- Letras repetidas, entradas invalidas, caracteres Unicode e acentos sao tratados de forma consistente, sem contar tentativa indevida.
+- O corpus tem pelo menos 1.200 palavras unicas aprovadas, cada uma com 5-12 letras; fonte/licenca estao documentadas e script valida o resultado.
+- Palpites sem acento encontram letras acentuadas conforme a regra definida, e a palavra revelada mantem a grafia original.
+
+### Salas e seguranca multiplayer
+
+- Dois a seis jogadores entram e veem o mesmo estado atualizado em tempo real; jogador fora do limite e recusado.
+- Qualquer participante conectado pode palpitar; dois palpites concorrentes iguais produzem uma unica atualizacao/erro.
+- Estado e palavra sao autoritativos no DO; palavra e informacao secreta nao aparecem em mensagens, assets ou logs antes do fim.
+- Estado persiste apos reinicializacao do DO; conexoes podem usar Hibernation quando compativel sem perder estado ou identidade.
+- Reconexao e desconexao seguem comportamento definido; sala sem conexoes expira apos 10 minutos.
+- Entradas HTTP/WebSocket, tamanho/frequencia de mensagens e codigos de sala tem validacao e limites adequados.
+
+### Autenticacao e dados
+
+- Convidados podem criar e participar de salas sem OAuth.
+- Google OAuth/OIDC opcional autentica, cria/recupera perfil e permite logout; respostas/callbacks invalidos sao rejeitados.
+- Cookies e sessoes sao protegidos, expiraveis e nao expostos em logs; estatisticas persistentes so sao associadas a conta autenticada.
+- Segredos OAuth nao estao no frontend, repositorio ou historico Git.
+
+### Interface e entrega
+
+- Interface em portugues brasileiro e utilizavel em dispositivos moveis e desktop, por teclado e tecnologias assistivas.
+- Build local Worker/Vite e testes relevantes passam, com resultados registrados.
+- Com autorizacao, a URL HTTPS publica abre a aplicacao e dois ou mais clientes externos concluem uma partida; WebSocket e OAuth de producao funcionam.
+
+## Riscos e dependencias
+
+- A fonte/licenca e a revisao linguistica do corpus podem impedir atingir 1.200 palavras; manter margem durante a coleta.
+- OAuth depende de registrar credenciais, callbacks e secrets para os ambientes local e de producao; isso exige acao/autorizacao do proprietario da conta.
+- Concorrencia, reconexao, hibernacao e persistencia DO exigem testes em ambiente local compatível com Wrangler e validacao na infraestrutura Cloudflare.
+- Codigos de sala previsiveis podem permitir acesso indevido; gerar codigos aleatorios, limitar tentativas e nao confundir codigo de sala com autenticacao.
+- D1 deve guardar somente dados necessarios; definir retencao de sessoes e estatisticas e comunicar tratamento de dados.
+- Limites e custos de Workers, DO, D1 e WebSockets devem ser verificados na documentacao/plano vigente antes da publicacao.
+- A URL publica e o callback Google dependem de deploy autorizado, disponibilidade de conta e configuracao OAuth; sao pre-requisitos externos da apresentacao final.
+- O agente Tester e somente leitura; correcoes e novos testes precisam ser implementados por Developer.
