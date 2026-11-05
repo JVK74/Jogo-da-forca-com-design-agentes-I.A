@@ -9,6 +9,9 @@ Decisoes fixadas:
 - De 2 a 6 jogadores por sala; qualquer jogador conectado pode enviar palpites.
 - Salas vazias expiram apos 10 minutos.
 - Palpites ignoram acentos, mas a palavra e exibida com sua grafia original.
+- Cada partida comeca com 6 tentativas. Uma configuracao explicita pode definir de 1 a 26 tentativas.
+- O alfabeto de palpites e A-Z, incluindo apenas as variantes acentuadas brasileiras: A/Á/À/Â/Ã, E/É/Ê, I/Í, O/Ó/Ô/Õ, U/Ú e C/Ç. Comparacoes ignoram acentos; letras Unicode decompostas sao normalizadas em NFC antes da validacao.
+- O estado privado da partida pode ser serializado em JSON e restaurado reproduzindo o historico cronologico de palpites. Contadores, listas e fase persistidos sao comparados ao resultado reconstruido; palpites posteriores ao encerramento e snapshots inconsistentes sao recusados. Respostas de rejeicao contem apenas dados publicos de controle, nunca o estado privado ou a palavra secreta.
 - Meta de pelo menos 1.200 palavras unicas, em portugues brasileiro, com 5 a 12 letras.
 - Frontend Vite com o plugin oficial Cloudflare para Workers; Workers atendem frontend e backend.
 - Durable Objects gerenciam salas, WebSockets e estado persistente da partida; usar WebSocket Hibernation quando apropriado.
@@ -37,7 +40,7 @@ D1 persiste perfis vinculados ao identificador estavel do Google, sessoes e esta
 
 ### Banco de palavras
 
-O corpus e mantido no lado servidor e nao deve ser servido como asset publico. A meta e no minimo 1.200 palavras validas, unicas, em portugues brasileiro, com 5 a 12 letras. Registrar origem, licenca e atribuicao. Um script repetivel normaliza Unicode, valida comprimento por caracteres/letras conforme regra definida, elimina duplicatas e informa rejeicoes. Palpites usam uma chave normalizada sem acentos; exibicao e revelacao preservam os caracteres originais. A validacao automatica de formato nao substitui revisao linguistica e de licenca.
+O corpus e mantido no lado servidor e nao deve ser servido como asset publico. A meta e no minimo 1.200 palavras validas, unicas, em portugues brasileiro, com 5 a 12 letras. Registrar origem, licenca e atribuicao. Um script repetivel normaliza Unicode, valida comprimento por caracteres/letras conforme regra definida, elimina duplicatas exatas e duplicatas apos remocao de acentos, e informa rejeicoes. Palpites aceitam A-Z e as variantes Á, À, Â, Ã, É, Ê, Í, Ó, Ô, Õ, Ú e Ç; sequencias decompostas sao normalizadas em NFC antes da validacao. A comparacao ignora acentos e Ç equivale a C, enquanto a grafia NFC original e preservada para exibicao. A validacao automatica de formato nao substitui revisao linguistica e de licenca.
 
 ## Funcionamento das salas
 
@@ -46,7 +49,7 @@ O corpus e mantido no lado servidor e nao deve ser servido como asset publico. A
 3. Ao haver pelo menos 2 participantes, a partida pode iniciar segundo a regra de inicio definida na implementacao; o DO escolhe a palavra de forma segura e guarda a original em estado persistente.
 4. Qualquer jogador conectado envia uma letra. O DO valida fase, formato e repeticao; palpites simultaneos iguais sao serializados e contam somente uma vez.
 5. O DO transmite apenas estado publico: letras reveladas, palpites, tentativas restantes, participantes e fase. A palavra completa nunca e enviada antes do termino.
-6. A partida termina por vitoria/derrota conforme regras aprovadas e, entao, a palavra pode ser revelada. O numero de erros/tentativas para derrota ainda precisa ser definido antes da implementacao das regras.
+6. A partida inicia com 6 tentativas. A configuracao pode escolher de 1 a 26 tentativas. A partida termina por vitoria/derrota conforme as regras; somente apos o termino a palavra pode ser revelada ao publico.
 7. Uma desconexao temporaria permite reconexao sem duplicar participante ou estado. Quando nao houver jogadores conectados, a sala permanece recuperavel por ate 10 minutos; apos esse prazo o DO remove/expira o estado conforme mecanismo de alarme e politica implementada.
 
 Definir antes de programar: inicio automatico ou por acao, saida do jogador que criou a sala, tratamento de abandono no meio da partida e mensagem/UX quando a sala expira.
@@ -120,7 +123,10 @@ O corpus pode ser carregado no Worker em build e nao deve ir para diretorio de a
 ### Regras e palavras
 
 - Uma partida pode iniciar, receber palpites validos e terminar em vitoria ou derrota; regras de tentativas estao documentadas.
-- Letras repetidas, entradas invalidas, caracteres Unicode e acentos sao tratados de forma consistente, sem contar tentativa indevida.
+- O motor usa 6 tentativas por padrao e valida configuracoes inteiras de 1 a 26; o estado original nao e mutado ao aplicar palpites.
+- Letras repetidas, entradas invalidas, caracteres Unicode e acentos sao tratados de forma consistente, sem contar tentativa indevida. Apenas A-Z e as variantes acentuadas definidas sao aceitas; entradas NFC e decompostas sao tratadas corretamente.
+- Estado serializado pode ser restaurado com validacao de consistencia; partidas em andamento e terminadas mantem o mesmo resultado, e a palavra permanece privada no estado publico.
+- Testes unitarios cobrem variantes acentuadas, dotless i e outros caracteres rejeitados, NFC/decomposto, imutabilidade, limites de tentativas, restauracao JSON, consistencia de resultados e protecao da palavra no estado publico restaurado.
 - O corpus tem pelo menos 1.200 palavras unicas aprovadas, cada uma com 5-12 letras; fonte/licenca estao documentadas e script valida o resultado.
 - Palpites sem acento encontram letras acentuadas conforme a regra definida, e a palavra revelada mantem a grafia original.
 
@@ -129,7 +135,7 @@ O corpus pode ser carregado no Worker em build e nao deve ir para diretorio de a
 - Dois a seis jogadores entram e veem o mesmo estado atualizado em tempo real; jogador fora do limite e recusado.
 - Qualquer participante conectado pode palpitar; dois palpites concorrentes iguais produzem uma unica atualizacao/erro.
 - Estado e palavra sao autoritativos no DO; palavra e informacao secreta nao aparecem em mensagens, assets ou logs antes do fim.
-- Estado persiste apos reinicializacao do DO; conexoes podem usar Hibernation quando compativel sem perder estado ou identidade.
+- Estado serializado persiste e pode ser restaurado apos reinicializacao do DO; a restauracao valida a consistencia da partida. Conexoes podem usar Hibernation quando compativel sem perder estado ou identidade.
 - Reconexao e desconexao seguem comportamento definido; sala sem conexoes expira apos 10 minutos.
 - Entradas HTTP/WebSocket, tamanho/frequencia de mensagens e codigos de sala tem validacao e limites adequados.
 
