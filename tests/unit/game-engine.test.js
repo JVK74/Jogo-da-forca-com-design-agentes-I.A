@@ -271,6 +271,22 @@ test("restauração rejeita vitória forjada após esgotar tentativas", () => {
   assert.throws(() => restoreGame(JSON.parse(JSON.stringify(impossibleWin))), TypeError);
 });
 
+test("restauração rejeita derrota forjada sem revelar a palavra secreta", () => {
+  const secret = "jabuticaba";
+  const game = createGame(secret, 3);
+  const impossibleLoss = {
+    ...game,
+    attemptsRemaining: 0,
+    status: "lost",
+  };
+
+  assert.throws(() => restoreGame(JSON.parse(JSON.stringify(impossibleLoss))), (error) => {
+    assert.equal(error instanceof TypeError, true);
+    assert.equal(error.message.includes(secret), false);
+    return true;
+  });
+});
+
 test("restauração rejeita palpites registrados depois do encerramento", () => {
   let game = createGame("abacate", 1);
   game = applyGuess(game, "Z").game;
