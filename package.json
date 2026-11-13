@@ -8,11 +8,14 @@
     "build": "vite build",
     "preview": "npm run build && vite preview",
     "test": "node --test",
+    "test:workers": "vitest run --config vitest.workers.config.js",
     "words:validate": "node scripts/validate-words.mjs"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.67.0",
+    "@cloudflare/vitest-plugin": "^1.8.2",
     "vite": "^8.3.5",
+    "vitest": "^4.1.12",
     "wrangler": "^4.157.0"
   }
 }
